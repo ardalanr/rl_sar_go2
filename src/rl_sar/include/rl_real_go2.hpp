@@ -18,6 +18,7 @@
 #include <unitree/robot/channel/channel_publisher.hpp>
 #include <unitree/robot/channel/channel_subscriber.hpp>
 #include <unitree/idl/go2/LowState_.hpp>
+#include <unitree/idl/go2/SportModeState_.hpp>
 #include <unitree/idl/go2/LowCmd_.hpp>
 #include <unitree/idl/go2/WirelessController_.hpp>
 #include <unitree/common/time/time_tool.hpp>
@@ -41,6 +42,7 @@ using namespace unitree::robot;
 using namespace unitree::robot::b2;
 #define TOPIC_LOWCMD "rt/lowcmd"
 #define TOPIC_LOWSTATE "rt/lowstate"
+#define TOPIC_SPORTMODESTATE "rt/sportmodestate"
 #define TOPIC_JOYSTICK "rt/wirelesscontroller"
 constexpr double PosStopF = (2.146E+9f);
 constexpr double VelStopF = (16000.0f);
@@ -105,13 +107,16 @@ private:
     std::string QueryServiceName(std::string form, std::string name);
     uint32_t Crc32Core(uint32_t *ptr, uint32_t len);
     void LowStateMessageHandler(const void *messages);
+    void SportModeStateMessageHandler(const void *messages);
     void JoystickHandler(const void *message);
     MotionSwitcherClient msc;
     unitree_go::msg::dds_::LowCmd_ unitree_low_command{};
     unitree_go::msg::dds_::LowState_ unitree_low_state{};
+    unitree_go::msg::dds_::SportModeState_ unitree_sport_mode_state{};
     unitree_go::msg::dds_::WirelessController_ joystick{};
     ChannelPublisherPtr<unitree_go::msg::dds_::LowCmd_> lowcmd_publisher;
     ChannelSubscriberPtr<unitree_go::msg::dds_::LowState_> lowstate_subscriber;
+    ChannelSubscriberPtr<unitree_go::msg::dds_::SportModeState_> sportmodestate_subscriber;
     ChannelSubscriberPtr<unitree_go::msg::dds_::WirelessController_> joystick_subscriber;
     xKeySwitchUnion unitree_joy;
 

@@ -58,6 +58,8 @@ struct RobotState
         std::vector<T> tau_est = std::vector<T>(32, 0.0);
         std::vector<T> cur = std::vector<T>(32, 0.0);
     } motor_state;
+
+    std::vector<T> linear_velocity = std::vector<T>(3, 0.0);  // x,y,z linear velocity
 };
 
 namespace Input

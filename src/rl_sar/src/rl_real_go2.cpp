@@ -53,6 +53,9 @@ RL_Real::RL_Real(bool wheel_mode)
     // create lowstate subscriber
     this->lowstate_subscriber.reset(new ChannelSubscriber<unitree_go::msg::dds_::LowState_>(TOPIC_LOWSTATE));
     this->lowstate_subscriber->InitChannel(std::bind(&RL_Real::LowStateMessageHandler, this, std::placeholders::_1), 1);
+    // create sport mode state subscriber
+    this->sportmodestate_subscriber.reset(new ChannelSubscriber<unitree_go::msg::dds_::SportModeState_>(TOPIC_SPORTMODESTATE));
+    this->sportmodestate_subscriber->InitChannel(std::bind(&RL_Real::SportModeStateMessageHandler, this, std::placeholders::_1), 1);
     // create joystick subscriber
     this->joystick_subscriber.reset(new ChannelSubscriber<unitree_go::msg::dds_::WirelessController_>(TOPIC_JOYSTICK));
     this->joystick_subscriber->InitChannel(std::bind(&RL_Real::JoystickHandler, this, std::placeholders::_1), 1);
@@ -144,9 +147,9 @@ void RL_Real::GetState(RobotState<double> *state)
     if (this->unitree_joy.components.R1 && this->unitree_joy.components.right) this->control.SetGamepad(Input::Gamepad::RB_DPadRight);
     if (this->unitree_joy.components.L1 && this->unitree_joy.components.R1) this->control.SetGamepad(Input::Gamepad::LB_RB);
 
-    this->control.x = this->joystick.ly();
-    this->control.y = -this->joystick.lx();
-    this->control.yaw = -this->joystick.rx();
+    // this->control.x = this->joystick.ly();
+    // this->control.y = -this->joystick.lx();
+    // this->control.yaw = -this->joystick.rx();
 
     state->imu.quaternion[0] = this->unitree_low_state.imu_state().quaternion()[0]; // w
     state->imu.quaternion[1] = this->unitree_low_state.imu_state().quaternion()[1]; // x
@@ -157,6 +160,13 @@ void RL_Real::GetState(RobotState<double> *state)
     {
         state->imu.gyroscope[i] = this->unitree_low_state.imu_state().gyroscope()[i];
     }
+    for (int i = 0; i < 3; ++i) {
+        state->linear_velocity[i] = this->unitree_sport_mode_state.velocity()[i];
+    }
+    // std::cout << "Velocity: ["
+    //       << state->linear_velocity[0] << ", "
+    //       << state->linear_velocity[1] << ", "
+    //       << state->linear_velocity[2] << "]" << std::endl;
     for (int i = 0; i < this->params.num_of_dofs; ++i)
     {
         state->motor_state.q[i] = this->unitree_low_state.motor_state()[this->params.joint_mapping[i]].q();
@@ -185,42 +195,50 @@ void RL_Real::RobotControl()
 {
     this->motiontime++;
 
+    bool movement_key_pressed = false;
+
     if (this->control.current_keyboard == Input::Keyboard::W)
     {
-        this->control.x += 0.1;
-        this->control.current_keyboard = this->control.last_keyboard;
+        this->control.x = 0.4;
+        // this->control.current_keyboard = this->control.last_keyboard;
+        movement_key_pressed = true;
     }
     if (this->control.current_keyboard == Input::Keyboard::S)
     {
-        this->control.x -= 0.1;
-        this->control.current_keyboard = this->control.last_keyboard;
+        this->control.x = -0.4;
+        // this->control.current_keyboard = this->control.last_keyboard;
+        movement_key_pressed = true;
     }
     if (this->control.current_keyboard == Input::Keyboard::A)
     {
-        this->control.y += 0.1;
-        this->control.current_keyboard = this->control.last_keyboard;
+        this->control.y = 0.4;
+        // this->control.current_keyboard = this->control.last_keyboard;
+        movement_key_pressed = true;
     }
     if (this->control.current_keyboard == Input::Keyboard::D)
     {
-        this->control.y -= 0.1;
-        this->control.current_keyboard = this->control.last_keyboard;
+        this->control.y = -0.4;
+        // this->control.current_keyboard = this->control.last_keyboard;
+        movement_key_pressed = true;
     }
     if (this->control.current_keyboard == Input::Keyboard::Q)
     {
         this->control.yaw += 0.1;
         this->control.current_keyboard = this->control.last_keyboard;
+        movement_key_pressed = true;
     }
     if (this->control.current_keyboard == Input::Keyboard::E)
     {
         this->control.yaw -= 0.1;
         this->control.current_keyboard = this->control.last_keyboard;
+        movement_key_pressed = true;
     }
-    if (this->control.current_keyboard == Input::Keyboard::Space)
+    if (!movement_key_pressed)
     {
         this->control.x = 0;
         this->control.y = 0;
         this->control.yaw = 0;
-        this->control.current_keyboard = this->control.last_keyboard;
+        // this->control.current_keyboard = this->control.last_keyboard;
     }
     if (this->control.current_keyboard == Input::Keyboard::N || this->control.current_gamepad == Input::Gamepad::X)
     {
@@ -230,7 +248,13 @@ void RL_Real::RobotControl()
     }
 
     this->GetState(&this->robot_state);
+    
+    // std::cout << "x:" << this->control.x << " y:" << this->control.y << " yaw:" << this->control.yaw << std::endl;
+    
     this->StateController(&this->robot_state, &this->robot_command);
+
+    // std::cout << "x:" << this->control.x << " y:" << this->control.y << " yaw:" << this->control.yaw << std::endl;
+    
     this->SetCommand(&this->robot_command);
 }
 
@@ -239,7 +263,10 @@ void RL_Real::RunModel()
     if (this->rl_init_done)
     {
         this->episode_length_buf += 1;
+        // this->obs.lin_vel = torch::tensor(this->robot_state.linear_velocity).unsqueeze(0);
+        // this->obs.lin_vel = torch::tensor({{this->control.x, this->control.y, 0.0}});
         this->obs.ang_vel = torch::tensor(this->robot_state.imu.gyroscope).unsqueeze(0);
+        std::cout << "obs.ang_vel: " << this->obs.ang_vel << std::endl;
         if (this->control.navigation_mode)
         {
 #if !defined(USE_CMAKE) && defined(USE_ROS)
@@ -427,6 +454,11 @@ std::string RL_Real::QueryServiceName(std::string form, std::string name)
 void RL_Real::LowStateMessageHandler(const void *message)
 {
     this->unitree_low_state = *(unitree_go::msg::dds_::LowState_ *)message;
+}
+
+void RL_Real::SportModeStateMessageHandler(const void *message)
+{
+    this->unitree_sport_mode_state = *(unitree_go::msg::dds_::SportModeState_ *)message;
 }
 
 void RL_Real::JoystickHandler(const void *message)
